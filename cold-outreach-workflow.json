@@ -1,0 +1,196 @@
+{
+  "name": "Cold Outreach Automation - Apollo + Gemini + Gmail",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-1600, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "v1", "name": "industry", "value": "Marketing and Advertising", "type": "string" },
+            { "id": "v2", "name": "leadsLimit", "value": 10, "type": "number" },
+            { "id": "v3", "name": "senderName", "value": "Tu Nombre", "type": "string" },
+            { "id": "v4", "name": "senderCompany", "value": "Tu Agencia", "type": "string" },
+            { "id": "v5", "name": "calendarLink", "value": "https://cal.com/tu-usuario/30min", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Set Campaign Vars",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-1380, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/v1/mixed_people/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Cache-Control", "value": "no-cache" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "X-Api-Key", "value": "={{$env.APOLLO_API_KEY}}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q_organization_industry_tag_ids\": [],\n  \"person_titles\": [\"CEO\", \"Founder\", \"Marketing Director\", \"Head of Growth\"],\n  \"organization_industry\": \"{{$json.industry}}\",\n  \"per_page\": {{$json.leadsLimit}},\n  \"page\": 1,\n  \"contact_email_status\": [\"verified\"]\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Apollo - Search Leads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-1160, 0]
+    },
+    {
+      "parameters": { "fieldToSplitOut": "people", "options": {} },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Split Leads",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [-940, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            { "id": "c1", "leftValue": "={{$json.email}}", "rightValue": "", "operator": { "type": "string", "operation": "notEmpty" } }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Filter - Has Email",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.2,
+      "position": [-720, 0]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "l1", "name": "firstName", "value": "={{$json.first_name}}", "type": "string" },
+            { "id": "l2", "name": "lastName", "value": "={{$json.last_name}}", "type": "string" },
+            { "id": "l3", "name": "fullName", "value": "={{$json.name}}", "type": "string" },
+            { "id": "l4", "name": "title", "value": "={{$json.title}}", "type": "string" },
+            { "id": "l5", "name": "email", "value": "={{$json.email}}", "type": "string" },
+            { "id": "l6", "name": "companyName", "value": "={{$json.organization?.name}}", "type": "string" },
+            { "id": "l7", "name": "companyDomain", "value": "={{$json.organization?.primary_domain}}", "type": "string" },
+            { "id": "l8", "name": "companyIndustry", "value": "={{$json.organization?.industry}}", "type": "string" },
+            { "id": "l9", "name": "companyDescription", "value": "={{$json.organization?.short_description || $json.organization?.seo_description || ''}}", "type": "string" },
+            { "id": "l10", "name": "linkedinUrl", "value": "={{$json.linkedin_url}}", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "Normalize Lead",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [-500, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "HTTP-Referer", "value": "https://n8n.local" },
+            { "name": "X-Title", "value": "Cold Outreach Automation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"google/gemini-3-pro-preview\",\n  \"response_format\": { \"type\": \"json_object\" },\n  \"temperature\": 0.7,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Eres un copywriter experto en cold outreach B2B en español. Tu tarea es generar un correo de prospección altamente personalizado y una propuesta comercial breve. Responde SIEMPRE en JSON válido con las claves: subject, email_body, proposal_title, proposal_text. Reglas: (1) Usa tono cercano y consultivo, no genérico. (2) Menciona algo específico de la empresa del lead. (3) Ofrece tres líneas de servicio: contenido viral con calendarios y planificación, landing pages que maximizan ventas, y automatización de procesos. (4) El CTA del email debe ser explícitamente agendar una reunión usando el enlace proporcionado. (5) email_body en HTML simple (<p>, <strong>, <ul>) listo para Gmail. (6) proposal_text de máximo 180 palabras, directo y orientado a resultados.\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Genera el correo y la propuesta para este lead:\\n\\nNombre: {{$json.fullName}}\\nCargo: {{$json.title}}\\nEmpresa: {{$json.companyName}}\\nIndustria: {{$json.companyIndustry}}\\nDescripción: {{$json.companyDescription}}\\nDominio: {{$json.companyDomain}}\\n\\nRemitente: {{$('Set Campaign Vars').item.json.senderName}} de {{$('Set Campaign Vars').item.json.senderCompany}}\\nEnlace para agendar: {{$('Set Campaign Vars').item.json.calendarLink}}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "OpenRouter - Gemini 3 Pro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-280, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Normalize Lead').item.json;\nconst raw = $input.item.json.choices?.[0]?.message?.content || '{}';\n\nlet ai;\ntry {\n  ai = JSON.parse(raw);\n} catch (e) {\n  const match = raw.match(/\\{[\\s\\S]*\\}/);\n  ai = match ? JSON.parse(match[0]) : {};\n}\n\nconst subject       = ai.subject       || `Propuesta para ${lead.companyName}`;\nconst emailBody     = ai.email_body    || '';\nconst proposalTitle = ai.proposal_title || `Propuesta para ${lead.companyName}`;\nconst proposalText  = ai.proposal_text  || '';\n\nconst sender = $('Set Campaign Vars').item.json;\nconst today = new Date().toLocaleDateString('es-ES', { year: 'numeric', month: 'long', day: 'numeric' });\n\nconst escape = (s = '') => String(s)\n  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst proposalHtml = `<!doctype html><html><head><meta charset=\"utf-8\"><title>${escape(proposalTitle)}</title>\n<style>\n  body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a;margin:48px;line-height:1.55;}\n  .header{border-bottom:3px solid #4F46E5;padding-bottom:16px;margin-bottom:32px;}\n  h1{margin:0 0 8px 0;font-size:26px;color:#4F46E5;}\n  .meta{color:#666;font-size:13px;}\n  .section{margin:24px 0;}\n  .pillars{display:block;margin:24px 0;}\n  .pillar{padding:14px 18px;border-left:4px solid #4F46E5;background:#F5F3FF;margin-bottom:12px;}\n  .cta{margin-top:32px;padding:20px;background:#111;color:#fff;border-radius:8px;text-align:center;}\n  .cta a{color:#fff;text-decoration:none;font-weight:bold;}\n  .footer{margin-top:40px;font-size:12px;color:#888;border-top:1px solid #eee;padding-top:12px;}\n</style></head><body>\n  <div class=\"header\">\n    <h1>${escape(proposalTitle)}</h1>\n    <div class=\"meta\">Para: ${escape(lead.fullName)} — ${escape(lead.companyName)} · ${escape(today)}</div>\n  </div>\n  <div class=\"section\">${escape(proposalText).replace(/\\n/g,'<br>')}</div>\n  <div class=\"pillars\">\n    <div class=\"pillar\"><strong>Contenido viral</strong> — calendarios y planificación para captar clientes.</div>\n    <div class=\"pillar\"><strong>Landing pages</strong> — diseño orientado a conversión para maximizar ventas.</div>\n    <div class=\"pillar\"><strong>Automatización</strong> — flujos que liberan horas de tu equipo cada semana.</div>\n  </div>\n  <div class=\"cta\">¿Lo vemos en una llamada de 30 min? <a href=\"${escape(sender.calendarLink)}\">Agendar reunión</a></div>\n  <div class=\"footer\">${escape(sender.senderName)} — ${escape(sender.senderCompany)}</div>\n</body></html>`;\n\nreturn [{ json: { subject, emailBody, proposalTitle, proposalText, proposalHtml, lead, sender } }];"
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Build Email & Proposal HTML",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-60, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.pdfshift.io/v3/convert/pdf",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"source\": {{ JSON.stringify($json.proposalHtml) }},\n  \"landscape\": false,\n  \"format\": \"A4\",\n  \"margin\": \"15mm\"\n}",
+        "options": {
+          "response": {
+            "response": { "responseFormat": "file", "outputPropertyName": "proposalPdf" }
+          }
+        }
+      },
+      "id": "a1b2c3d4-0009-4000-8000-000000000009",
+      "name": "Generate PDF (PDFShift)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [160, 0]
+    },
+    {
+      "parameters": {
+        "sendTo": "={{$('Normalize Lead').item.json.email}}",
+        "subject": "={{$('Build Email & Proposal HTML').item.json.subject}}",
+        "emailType": "html",
+        "message": "={{$('Build Email & Proposal HTML').item.json.emailBody}}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [ { "property": "proposalPdf" } ]
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "a1b2c3d4-0010-4000-8000-000000000010",
+      "name": "Gmail - Send Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [380, 0]
+    }
+  ],
+  "connections": {
+    "Manual Trigger":               { "main": [[{ "node": "Set Campaign Vars", "type": "main", "index": 0 }]] },
+    "Set Campaign Vars":            { "main": [[{ "node": "Apollo - Search Leads", "type": "main", "index": 0 }]] },
+    "Apollo - Search Leads":        { "main": [[{ "node": "Split Leads", "type": "main", "index": 0 }]] },
+    "Split Leads":                  { "main": [[{ "node": "Filter - Has Email", "type": "main", "index": 0 }]] },
+    "Filter - Has Email":           { "main": [[{ "node": "Normalize Lead", "type": "main", "index": 0 }]] },
+    "Normalize Lead":               { "main": [[{ "node": "OpenRouter - Gemini 3 Pro", "type": "main", "index": 0 }]] },
+    "OpenRouter - Gemini 3 Pro":    { "main": [[{ "node": "Build Email & Proposal HTML", "type": "main", "index": 0 }]] },
+    "Build Email & Proposal HTML":  { "main": [[{ "node": "Generate PDF (PDFShift)", "type": "main", "index": 0 }]] },
+    "Generate PDF (PDFShift)":      { "main": [[{ "node": "Gmail - Send Email", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "active": false,
+  "versionId": "1.0.0",
+  "meta": { "templateCredsSetupCompleted": false },
+  "tags": []
+}
